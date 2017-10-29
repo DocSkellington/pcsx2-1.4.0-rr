@@ -47,7 +47,7 @@ public:
 public:
 
 	bool fExistKey = false;
-	u8 buf[2][6];
+	u8 buf[2][18];
 	
 public:
 	wxString serialize()const;
@@ -73,6 +73,7 @@ private:
 	void setNormalButton(int port, wxString button, int pressure);
 	int getNormalButton(int port, wxString button)const;
 	void getKeyBit(byte keybit[2], wxString button)const;
+	int getPressureByte(wxString button)const;
 
 	void setAnalogButton(int port, wxString button, int push);
 	int getAnalogButton(int port, wxString button)const;

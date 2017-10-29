@@ -95,16 +95,30 @@ void PadData::setNormalButton(int port,wxString button, int fpushed)
 	if (port < 0 || 1 < port)return;
 	byte keybit[2];
 	getKeyBit(keybit,button);
+	int pressureByteIndex = getPressureByte(button);
 
-	if (fpushed)
+	if (fpushed > 0)
 	{
+		// set whether or not the button is pressed
 		buf[port][0] = ~(~buf[port][0] | keybit[0]);
 		buf[port][1] = ~(~buf[port][1] | keybit[1]);
+
+		// if the button supports pressure sensitivity
+		if (pressureByteIndex != -1)
+		{
+			buf[port][6 + pressureByteIndex] = fpushed;
+		}
 	}
 	else
 	{
 		buf[port][0] = (buf[port][0] | keybit[0]);
 		buf[port][1] = (buf[port][1] | keybit[1]);
+
+		// if the button supports pressure sensitivity
+		if (pressureByteIndex != -1)
+		{
+			buf[port][6 + pressureByteIndex] = 0;
+		}
 	}
 }
 
@@ -113,9 +127,26 @@ int PadData::getNormalButton(int port, wxString button)const
 	if (port < 0 || 1 < port)return false;
 	byte keybit[2];
 	getKeyBit(keybit, button);
+	int pressureByteIndex = getPressureByte(button);
+
+	// If the button is pressed on either controller
 	bool f1 = (~buf[port][0] & keybit[0])>0;
 	bool f2 = (~buf[port][1] & keybit[1])>0;
-	return (f1 || f2);
+
+	if (f1 || f2) 
+	{
+		// If the button does not support pressure sensitive inputs
+		// just return 1 for pressed.
+		if (pressureByteIndex == -1)
+		{
+			return 1;
+		}
+		// else return the pressure information
+		return buf[port][6 + pressureByteIndex];
+	}
+
+	// else the button isnt pressed at all
+	return 0;
 }
 
 void PadData::getKeyBit(byte keybit[2], wxString button)const
@@ -143,6 +174,33 @@ void PadData::getKeyBit(byte keybit[2], wxString button)const
 	{
 		keybit[0] = 0;
 		keybit[1] = 0;
+	}
+}
+
+// just returns an index for the buffer to set the pressure byte
+// returns -1 if it is a button that does not support pressure sensitivty
+int PadData::getPressureByte(wxString button)const
+{
+	// button order
+	// R - L - U - D - Tri - Sqr - Circle - Cross - L1 - R1 - L2 - R2
+
+	if (button == L"up") { return 2; }
+	else if (button == L"left") { return 1; }
+	else if (button == L"right") { return 0; }
+	else if (button == L"down") { return 3; }
+
+	else if (button == L"x") { return 6; }
+	else if (button == L"circle") { return 5; }
+	else if (button == L"square") { return 7; }
+	else if (button == L"triangle") { return 4; }
+
+	else if (button == L"l1") { return 8; }
+	else if (button == L"l2") { return 10; }
+	else if (button == L"r1") { return 9; }
+	else if (button == L"r2") { return 11; }
+	else
+	{
+		return 1;
 	}
 }
 

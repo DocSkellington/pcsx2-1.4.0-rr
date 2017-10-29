@@ -26,18 +26,14 @@ enum
 	ID_RIGHT_PRESSURE,
 	ID_LEFT_PRESSURE,
 	ID_DOWN_PRESSURE,
-	ID_SELECT_PRESSURE,
-	ID_START_PRESSURE,
 	ID_X_PRESSURE,
 	ID_CIRCLE_PRESSURE,
 	ID_SQUARE_PRESSURE,
 	ID_TRIANGLE_PRESSURE,
 	ID_L1_PRESSURE,
 	ID_L2_PRESSURE,
-	ID_L3_PRESSURE,
 	ID_R1_PRESSURE,
 	ID_R2_PRESSURE,
-	ID_R3_PRESSURE,
 	// Analog (sliders)
 	ID_L_UPDOWN,
 	ID_L_RIGHTLEFT,
@@ -119,23 +115,11 @@ VirtualPad::VirtualPad(wxWindow * parent, int controllerPort)
 	// L3, R3
 	y = 20;
 	buttons[ID_L3-1] = new wxToggleButton(panel, ID_L3, L"L3", wxPoint(150, y), wxSize(w, h));
-	buttonsPressure[ID_L3 - 1] = new wxSpinCtrl(panel, ID_L3_PRESSURE, "255", wxPoint(150, y), wxSize(w, h),
-		wxSP_ARROW_KEYS | wxALIGN_LEFT, 0, 255, 255);
-	buttonsPressure[ID_L3 - 1]->Hide();
 	buttons[ID_R3-1] = new wxToggleButton(panel, ID_R3, L"R3", wxPoint(350, y), wxSize(w, h));
-	buttonsPressure[ID_R3 - 1] = new wxSpinCtrl(panel, ID_R3_PRESSURE, "255", wxPoint(150, y), wxSize(w, h),
-		wxSP_ARROW_KEYS | wxALIGN_LEFT, 0, 255, 255);
-	buttonsPressure[ID_R3 - 1]->Hide();
 
 	// Start, select
 	buttons[ID_SELECT-1] = new wxToggleButton(panel, ID_SELECT, _("Select"), wxPoint(150, y + h + space), wxSize(w, h));
-	buttonsPressure[ID_SELECT - 1] = new wxSpinCtrl(panel, ID_SELECT_PRESSURE, "255", wxPoint(150, y), wxSize(w, h),
-		wxSP_ARROW_KEYS | wxALIGN_LEFT, 0, 255, 255);
-	buttonsPressure[ID_SELECT - 1]->Hide();
 	buttons[ID_START-1] = new wxToggleButton(panel, ID_START, _("Start"), wxPoint(350, y + h + space), wxSize(w, h));
-	buttonsPressure[ID_START - 1] = new wxSpinCtrl(panel, ID_START_PRESSURE, "255", wxPoint(150, y), wxSize(w, h),
-		wxSP_ARROW_KEYS | wxALIGN_LEFT, 0, 255, 255);
-	buttonsPressure[ID_START - 1]->Hide();
 
 	// Left analog
 	x = 5;
@@ -171,6 +155,10 @@ VirtualPad::VirtualPad(wxWindow * parent, int controllerPort)
 	for (int i = ID_UP; i <= 16; i++)
 		Bind(wxEVT_TOGGLEBUTTON, &VirtualPad::OnClick, this, i);
 
+	// Handling changes in pressure sensitivity
+	for (int i = ID_UP_PRESSURE; i <= ID_R2_PRESSURE; i++)
+		Bind(wxEVT_SPINCTRL, &VirtualPad::OnPressureCtrlChange, this, i);
+
 	// Handling TextCtrl changes (analog keys)
 	for (int i = ID_L_UPDOWN_TEXT; i <= ID_R_RIGHTLEFT_TEXT; i++)
 		Bind(wxEVT_SPINCTRL, &VirtualPad::OnTextCtrlChange, this, i);
@@ -199,15 +187,26 @@ void VirtualPad::OnClick(wxCommandEvent & event)
 {
 	if (0 < event.GetId() && event.GetId() <= 16) {
 		int id = event.GetId() - ID_UP;
-		int pressure = 0;
+		u8 pressure = 0;
 		if (event.IsChecked()) {
-			pressure = buttonsPressure[id]->GetValue();
+			// for a button to be pressed, it just has to be > 0
+			pressure = 255;
+			// skip non-pressure sensitive buttons
+			if (isPressureSensitive(id + ID_UP)) {
+				pressure = buttonsPressure[id]->GetValue(); // null ptrs on buttons with pressure sensitivity (should just skip them or add them back because i skip them later)
+				if (pressure > 255)
+					pressure = 255;
+				else if (pressure < 0)
+					pressure = 0;
+			}
 		}
 		g_TASInput.SetButtonState(port, PadDataNormalKeys[id], pressure);
 	}
 	else
 		Console.WriteLn("Virtual Pad Error: Unknown toggle button pressed");
 }
+
+// TODO TAS - should probably implement an OnRelease (if wxwidgets has that?)
 
 void VirtualPad::OnResetButton(wxCommandEvent & event)
 {
@@ -217,6 +216,7 @@ void VirtualPad::OnResetButton(wxCommandEvent & event)
 		buttons[i]->SetValue(false);
 		g_TASInput.SetButtonState(port, PadDataNormalKeys[i], 0);
 	}
+	// Pressure sensitivity
 	for (int i = 0; i < 12; i++) {
 		buttonsPressure[i]->SetValue(255);
 	}
@@ -228,6 +228,29 @@ void VirtualPad::OnResetButton(wxCommandEvent & event)
 		sticksText[i]->SetValue(127);
 		g_TASInput.UpdateAnalog(port, PadDataAnalogKeys[i], 127);
 	}
+}
+
+void VirtualPad::OnPressureCtrlChange(wxSpinEvent & event)
+{
+	if (ID_UP_PRESSURE <= event.GetId() && event.GetId() <= ID_R2_PRESSURE)
+	{
+		int id = getButtonIdFromPressure(event.GetId()) - ID_UP;
+		if (id == -1)
+			return;
+		u8 pressure = 0;
+		if (event.IsChecked()) {
+			// this event is only fired on buttons with a 
+			// pressure spinctrl, so no validation needed!
+			pressure = buttonsPressure[id]->GetValue();
+			if (pressure > 255)
+				pressure = 255;
+			else if (pressure < 0)
+				pressure = 0;
+		}
+		g_TASInput.SetButtonState(port, PadDataNormalKeys[id], pressure);
+	}
+	else
+		Console.WriteLn("Virtual Pad Error: Unknown pressure sensitivty change");
 }
 
 void VirtualPad::OnTextCtrlChange(wxSpinEvent & event)
@@ -243,7 +266,7 @@ void VirtualPad::OnTextCtrlChange(wxSpinEvent & event)
 			g_TASInput.UpdateAnalog(port, PadDataAnalogKeys[id], event.GetInt());
 	}
 	else
-		Console.WriteLn("Virtual Pad Error: Unknow TextCtrl change");
+		Console.WriteLn("Virtual Pad Error: Unknown TextCtrl change");
 }
 
 void VirtualPad::OnSliderMove(wxCommandEvent & event)
@@ -260,4 +283,35 @@ void VirtualPad::OnSliderMove(wxCommandEvent & event)
 	}
 	else
 		Console.WriteLn("Virtual Pad Error: Unknow TextCtrl change");
+}
+
+int VirtualPad::getButtonIdFromPressure(int pressureCtrlId) {
+
+	if (pressureCtrlId <= ID_DOWN_PRESSURE) {
+		return pressureCtrlId - 16;
+	}
+	else if (pressureCtrlId >= ID_X_PRESSURE && pressureCtrlId <= ID_L2_PRESSURE) {
+		// Skip start and select buttons
+		return pressureCtrlId - 16 + 2;
+	}
+	else if (pressureCtrlId >= ID_R1_PRESSURE && pressureCtrlId <= ID_R2_PRESSURE) {
+		// skip L3 button
+		return pressureCtrlId - 16 + 2 + 1;
+	}
+	else {
+		// else, wasnt a pressure sensitive event
+		return -1;
+	}
+}
+
+bool VirtualPad::isPressureSensitive(int buttonId) {
+
+
+	if (buttonId != ID_SELECT ||
+		buttonId != ID_START ||
+		buttonId != ID_L3 ||
+		buttonId != ID_R3) {
+		return false;
+	}
+	return true;
 }
