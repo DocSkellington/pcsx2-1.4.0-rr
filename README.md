@@ -1,3 +1,6 @@
+# New fork
+Please see [this new fork](https://github.com/xTVaser/pcsx2-rr) for future updates and new releases. Having a fork immediately from PCSX2 will make emulator updates easier. Thank you for your comprehension!
+
 # pcsx2-1.4.0-rr
 This README proposes a translation (and an update of certain parts, of course) of the original README (be wary that it may not be accurate as I don't speak nor understand Japanese and most of the translation comes from Google Translation). Consider this project as version 4 of PCSX2-rr.<br>
 This informal emulator adds features needed to create a TAS to [pcsx2-1.4.0](https://github.com/PCSX2/pcsx2).<br>
